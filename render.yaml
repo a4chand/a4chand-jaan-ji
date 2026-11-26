@@ -1,0 +1,28 @@
+# A4CHAND Jaan ji — Render Blueprint (free tier, no card)
+# Deploy: Render Dashboard > New > Blueprint > connect the repo/folder containing this file.
+# The app code is NOT changed by this file — it only tells Render how to run
+# the already-built bundle (server.mjs + api-server/index.mjs + static frontend).
+services:
+  - type: web
+    name: a4chand-jaan-ji
+    env: node
+    plan: free
+    buildCommand: echo "prebuilt bundle, nothing to build"
+    startCommand: node server.mjs
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: a4chand-db
+          property: connectionString
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: API_PORT
+        value: "5001"
+
+databases:
+  - name: a4chand-db
+    plan: free
+    databaseName: a4chand
+    user: a4chand
