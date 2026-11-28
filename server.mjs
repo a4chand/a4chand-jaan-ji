@@ -16,7 +16,7 @@ const DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = DIR; // index.html, assets, manifest, icons live here
 const PORT = Number(process.env.PORT || 5000);
 const API_PORT = Number(process.env.API_PORT || 5001);
-const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".ico": "image/x-icon", ".txt": "text/plain", ".webmanifest": "application/manifest+json" };
+const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".ico": "image/x-icon", ".txt": "text/plain", ".webmanifest": "application/manifest+json", ".apk": "application/vnd.android.package-archive", ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime", ".webp": "image/webp" };
 
 if (!process.env.DATABASE_URL) { console.error("ERROR: DATABASE_URL must be set, e.g. postgres://a4chand:PASSWORD@localhost:5432/a4chand"); process.exit(1); }
 if (!process.env.SESSION_SECRET) { console.error("ERROR: SESSION_SECRET must be set to a long random string"); process.exit(1); }
@@ -121,7 +121,20 @@ const server = http.createServer((req, res) => {
   let p = path.join(ROOT, url.pathname === "/" ? "index.html" : decodeURIComponent(url.pathname));
   if (!p.startsWith(ROOT)) { res.writeHead(403); res.end(); return; }
   if (!fs.existsSync(p) || fs.statSync(p).isDirectory()) p = path.join(ROOT, "index.html"); // SPA fallback
-  res.writeHead(200, { "content-type": MIME[path.extname(p)] || "application/octet-stream" });
+  // Static files (incl. /uploads/* for Editors & Updates files).
+  // Range requests are honoured so tutorial videos can stream/seek.
+  const size = fs.statSync(p).size;
+  const range = req.headers.range;
+  if (range && /^\s*bytes=(\d*)-(\d*)\s*$/.test(range)) {
+    const [, startS, endS] = range.match(/^\s*bytes=(\d*)-(\d*)\s*$/);
+    const start = startS ? Number(startS) : 0;
+    const end = endS ? Math.min(Number(endS), size - 1) : size - 1;
+    if (start >= size || end < start) { res.writeHead(416, { "content-range": `bytes */${size}` }); res.end(); return; }
+    res.writeHead(206, { "content-type": MIME[path.extname(p)] || "application/octet-stream", "content-range": `bytes ${start}-${end}/${size}`, "accept-ranges": "bytes", "content-length": end - start + 1 });
+    fs.createReadStream(p, { start, end }).pipe(res);
+    return;
+  }
+  res.writeHead(200, { "content-type": MIME[path.extname(p)] || "application/octet-stream", "accept-ranges": "bytes", "content-length": size });
   fs.createReadStream(p).pipe(res);
 });
 server.listen(PORT, "0.0.0.0", () => console.log(`A4CHAND Jaan ji running at http://localhost:${PORT}  (API on ${API_PORT})`));
